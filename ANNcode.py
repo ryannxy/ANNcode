@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 # 1. IMPORT LIBRARIES
 import pandas as pd
 import numpy as np
@@ -8,12 +9,8 @@ import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer
-from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, roc_auc_score, roc_curve
-
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.regularizers import l2
-from tensorflow.keras.callbacks import EarlyStopping
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, confusion_matrix, roc_curve
+from sklearn.neural_network import MLPClassifier
 
 # 2. LOAD DATA
 try:
@@ -29,100 +26,80 @@ X = dataset.iloc[:, 3:-1].values
 y = dataset.iloc[:, -1].values
 
 # B. Encoding Categorical Data
+# Gender
 le = LabelEncoder()
-X[:, 2] = le.fit_transform(X[:, 2]) # Gender
+X[:, 2] = le.fit_transform(X[:, 2])
 
-ct = ColumnTransformer(transformers=[('encoder', OneHotEncoder(), [1])], remainder='passthrough')
-X = np.array(ct.fit_transform(X)) # Geography
+# Geography one-hot encoding
+ct = ColumnTransformer(transformers=[('encoder', OneHotEncoder(), [1])], 
+                       remainder='passthrough')
+X = np.array(ct.fit_transform(X))
 
 # 4. DATA SPLITTING (80/20)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=0)
 
 # 5. FEATURE SCALING
 sc = StandardScaler()
 X_train = sc.fit_transform(X_train)
 X_test = sc.transform(X_test)
 
-# 6. MODEL ARCHITECTURE (EXPANSION STRATEGY)
-model = Sequential()
-
-# Hidden Layer 1:
-# We use 18 neurons to project data into higher dimensions (Cover's Theorem)
-model.add(Dense(units=6, activation='relu', kernel_regularizer=l2(0.0), input_dim=X_train.shape[1]))
-model.add(Dropout(0)) # 10% Dropout
-
-# Hidden Layer 2:
-# We compress the features to summarize the most important patterns
-model.add(Dense(units=6, activation='relu', kernel_regularizer=l2(0.0)))
-model.add(Dropout(0)) # 10% Dropout
-
-# Output Layer
-model.add(Dense(units=1, activation='sigmoid'))
-
-# Compile
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-
-# 7. MODEL TRAINING
-print("\nTraining model...")
-early_stop = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, verbose=1)
-
-history = model.fit(
-    X_train, y_train,
+# 6. ANN MODEL (WITHOUT TENSORFLOW)
+model = MLPClassifier(
+    hidden_layer_sizes=(6, 6),  # 2 hidden layers, 6 neurons each (same as your TF model)
+    activation='relu',
+    solver='adam',
+    alpha=0.0001,               # L2 regularization
     batch_size=32,
-    epochs=100,
-    validation_data=(X_test, y_test),
-    callbacks=[early_stop],
-    verbose=1
+    max_iter=200,
+    random_state=0,
+    verbose=True
 )
 
-# 8. EVALUATION & METRICS
-print("\nCalculating Metrics...")
+print("\nTraining ANN model...")
+model.fit(X_train, y_train)
 
-# Get Predictions
-y_pred_probs = model.predict(X_test)
-y_pred = (y_pred_probs > 0.5)
+# 7. EVALUATION
+y_pred = model.predict(X_test)
+y_pred_probs = model.predict_proba(X_test)[:, 1]
 
-# Calculate 3 Key Metrics
 acc = accuracy_score(y_test, y_pred)
 rec = recall_score(y_test, y_pred)
 roc = roc_auc_score(y_test, y_pred_probs)
 
-print(f"--------------------------------------")
+print("\n--------------------------------------")
 print(f"Final Test Accuracy: {acc*100:.2f}%")
 print(f"Recall (Sensitivity): {rec*100:.2f}%")
 print(f"ROC-AUC Score:       {roc:.4f}")
-print(f"--------------------------------------")
+print("--------------------------------------")
 
-# 9. VISUALIZATIONS
+# 8. VISUALIZATIONS
 plt.figure(figsize=(18, 5))
 
-# Plot A: Loss Curve
-plt.subplot(1, 3, 1)
-plt.plot(history.history['loss'], label='Training Loss')
-plt.plot(history.history['val_loss'], label='Validation Loss')
-plt.title('Learning Curve (Loss)')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.legend()
-plt.grid(True)
-
-# Plot B: Confusion Matrix
+# Confusion Matrix
 cm = confusion_matrix(y_test, y_pred)
-plt.subplot(1, 3, 2)
+plt.subplot(1, 3, 1)
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
 plt.title('Confusion Matrix')
 plt.ylabel('Actual')
 plt.xlabel('Predicted')
 
-# Plot C: ROC Curve
+# ROC Curve
 fpr, tpr, thresholds = roc_curve(y_test, y_pred_probs)
-plt.subplot(1, 3, 3)
-plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'AUC = {roc:.2f}')
-plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.subplot(1, 3, 2)
+plt.plot(fpr, tpr, label=f"AUC = {roc:.2f}")
+plt.plot([0, 1], [0, 1], linestyle='--')
+plt.title('ROC Curve')
 plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
-plt.title('ROC Curve')
-plt.legend(loc="lower right")
+plt.legend()
+
+# Loss Curve
+plt.subplot(1, 3, 3)
+plt.plot(model.loss_curve_)
+plt.title("Loss Curve")
+plt.xlabel("Iterations")
+plt.ylabel("Loss")
 plt.grid(True)
 
 plt.tight_layout()
