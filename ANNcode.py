@@ -46,10 +46,10 @@ X_test = sc.transform(X_test)
 
 # 6. ANN MODEL (WITHOUT TENSORFLOW)
 model = MLPClassifier(
-    hidden_layer_sizes=(6, 6),  # 2 hidden layers, 6 neurons each (same as your TF model)
+    hidden_layer_sizes=(6, 6), 
     activation='relu',
     solver='adam',
-    alpha=0.0001,               # L2 regularization
+    alpha=0.0001,               
     batch_size=32,
     max_iter=200,
     random_state=0,
